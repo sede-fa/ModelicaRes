@@ -1,4 +1,4 @@
-# !/usr/bin/python # pylint: disable=I0011, C0301, C0302
+#!/usr/bin/python
 # -*- coding: utf-8 -*-
 """This submodule contains classes to help load, analyze, and plot results from
 Modelica_ linearizations:
@@ -19,44 +19,42 @@ __copyright__ = ("Copyright 2012-2014, Kevin Davies, Hawaii Natural Energy "
 __license__ = "BSD-compatible (see LICENSE.txt)"
 
 # Standard pylint settings for this project:
-# pylint: disable=I0011, C0302, C0325, R0903, R0904, R0912, R0913, R0914, R0915
+# pylint: disable=I0011, C0302, C0325, R0903, R0904, R0912, R0913, R0914, R0915,
 # pylint: disable=I0011, W0141, W0142
 
 # Other:
-# pylint: disable=I0011, C0103, E0611, E1101, R0801, W0102
+# pylint: disable=C0103, E0611, E1101, W0102
 
 import os
 import numpy as np
 
 from control.matlab import ss
 from functools import wraps
-from matplotlib.cbook import iterable
-from natu.util import multiglob
+from numpy import iterable
 from scipy.signal import ss2tf
 from six import string_types
 
-from . import util
-from ._freqplot import bode_plot, nyquist_plot
-from ._res import Res, ResList
+from modelicares import util
+from modelicares._freqplot import bode_plot, nyquist_plot
+from modelicares._res import Res, ResList
 
 # File loading functions
-from ._io.dymola import readlin as dymola
-READERS = [('dymola', dymola)]  # LinRes tries these in order.
+from modelicares._io.dymola import loadlin as dymola
+LOADERS = [('dymola', dymola)] # LinRes tries these in order.
 # All of the keys should be in lowercase.
 
-
-def _from_names(meth):
+def _from_names(func):
     """Return a method that accepts names or indices to identify system inputs
-    and outputs, given a method that only accepts indices (*meth*).
+    and outputs, given a method that only accepts indices (*func*).
 
     I.e., a decorator to accept names or indices to identify inputs and outputs
     """
-    @wraps(meth)
+    @wraps(func)
     def wrapped(self, iu=None, iy=None):
         """Method that accepts names or indices to identify system inputs and
         outputs
 
-        **Parameters:**
+        **Arguments:**
 
         - *iu*: Index or name of the input
 
@@ -92,23 +90,21 @@ def _from_names(meth):
             except ValueError:
                 raise ValueError('The output "%s" is invalid.' % iy)
 
-        return meth(self, iu, iy)
+        return func(self, iu, iy)
 
     return wrapped
 
 
 class LinRes(Res):
-
     """Class for Modelica_-based linearization results and methods to analyze
     those results
 
-    **Initialization parameters:**
+    **Initialization arguments:**
 
     - *fname*: Name of the file (including the directory if necessary)
 
          The file must contain four matrices:  *Aclass* (specifies the class
          name, which must be "AlinearSystem"), *nx*, *xuyName*, and *ABCD*.
-         '/' can be used as a path separator in both Windows and Unix/Linux.
 
     - *tool*: String indicating the linearization tool that created the file
       and thus the function to be used to load it
@@ -129,34 +125,33 @@ class LinRes(Res):
 
     **Properties:**
 
-    - :attr:`dirname` - Directory from which the variables were loaded
+    - *dirname* - Directory from which the variables were loaded
 
-    - :attr:`fbase` - Base filename from which the variables were loaded, without
+    - *fbase* - Base filename from which the variables were loaded, without
       the directory or extension
 
-    - :attr:`fname` - Filename from which the variables were loaded, with absolute
+    - *fname* - Filename from which the variables were loaded, with absolute
       path
 
-    - :attr:`sys` - State-space system as an instance of :class:`control.StateSpace`
+    - *sys* - State-space system as an instance of :class:`control.StateSpace`
 
          It contains:
 
-         - :attr:`A`, :attr:`B`, :attr:`C`, :attr:`D`: Matrices of the linear
-           system
+         - *A*, *B*, *C*, *D*: Matrices of the linear system
 
               .. code-block:: modelica
 
                  der(x) = A*x + B*u;
                       y = C*x + D*u;
 
-         - :attr:`state_names`: List of names of the states (*x*)
+         - *state_names*: List of names of the states (*x*)
 
-         - :attr:`input_names`: List of names of the inputs (*u*)
+         - *input_names*: List of names of the inputs (*u*)
 
-         - :attr:`output_names`: List of names of the outputs (*y*)
+         - *output_names*: List of names of the outputs (*y*)
 
-    - :attr:`tool` - String indicating the function used to read the results
-      (named after the corresponding Modelica_ tool)
+    - *tool* - String indicating the function used to load the results (named
+      after the corresponding Modelica_ tool)
 
     **Example:**
 
@@ -166,38 +161,37 @@ class LinRes(Res):
     """
 
     def __init__(self, fname='dslin.mat', tool=None):
-        """Upon initialization, read Modelica_ linearization results from a
+        """Upon initialization, load Modelica_ linearization results from a
         file.
 
         See the top-level class documentation.
         """
 
-        # Read the file.
-        fname = util.cleanpath(fname)
+        # Load the file.
         if tool is None:
-            # Read the file and store the data.
-            for tool, read in READERS[:-1]:
+            # Load the file and store the data.
+            for (tool, load) in LOADERS[:-1]:
                 try:
-                    self.sys = read(fname)
+                    self.sys = load(fname)
                 except IOError:
                     raise
                 except Exception as exception:
-                    print("The %s reader gave the following error message:\n%s"
+                    print("The %s loader gave the following error message:\n%s"
                           % (tool, exception.args[0]))
-                    print("Trying the next reader...")
+                    print("Trying the next loader...")
                     continue
                 else:
                     break
-            tool, read = READERS[-1]
+            (tool, load) = LOADERS[-1]
         else:
-            readerdict = dict(READERS)
+            loaderdict = dict(LOADERS)
             try:
-                read = readerdict[tool.lower()]
-            except KeyError:
+                load = loaderdict[tool.lower()]
+            except:
                 raise LookupError('"%s" is not one of the available tools '
                                   '("%s").' % (tool,
-                                               '", "'.join(list(readerdict))))
-        self.sys = read(fname)
+                                               '", "'.join(list(loaderdict))))
+        self.sys = load(fname)
 
         # Remember the tool and filename.
         self.tool = tool
@@ -218,7 +212,7 @@ class LinRes(Res):
     def to_siso(self, iu, iy):
         """Return a SISO system given input and output indices.
 
-        **Parameters:**
+        **Arguments:**
 
         - *iu*: Index or name of the input
 
@@ -250,7 +244,7 @@ class LinRes(Res):
     def to_tf(self, iu, iy):
         """Return a transfer function given input and output names.
 
-        **Parameters:**
+        **Arguments:**
 
         - *iu*: Index or name of the input
 
@@ -278,7 +272,7 @@ class LinRes(Res):
         The Bode plots of a MIMO system are overlayed. This is different than
         MATLAB\ :sup:`®`, which creates an array of subplots.
 
-        **Parameters:**
+        **Arguments:**
 
         - *axes*: Tuple (pair) of axes for the magnitude and phase plots
 
@@ -293,12 +287,12 @@ class LinRes(Res):
         - *label*: Label for the figure (ignored if *axes* is provided)
 
              This is used as the base filename if the figure is saved using
-             :func:`~modelicares.util.save` or
-             :func:`~modelicares.util.saveall`.
+             :meth:`~modelicares.util.save` or
+             :meth:`~modelicares.util.saveall`.
 
         - *title*: Title for the figure
 
-             If *title* is 'None' (default), then the title will be "Bode plot
+             If *title* is *None* (default), then the title will be "Bode plot
              of fbase", where fbase is the base filename of the data.  Use ''
              for no title.
 
@@ -323,19 +317,19 @@ class LinRes(Res):
              - *freqs*: List or frequencies or tuple of (min, max) frequencies
                over which to plot the system response.
 
-                  If *freqs* is 'None', then an appropriate range will be
+                  If *freqs* is *None*, then an appropriate range will be
                   determined automatically.
 
-             - *in_Hz*: If `True` (default), the frequencies (*freqs*) are in
+             - *in_Hz*: If *True* (default), the frequencies (*freqs*) are in
                Hz and should be plotted in Hz (otherwise, rad/s)
 
-             - *in_dB*: If `True` (default), plot the magnitude in dB
+             - *in_dB*: If *True* (default), plot the magnitude in dB
 
-             - *in_deg*: If `True` (default), plot the phase in degrees
+             - *in_deg*: If *True* (default), plot the phase in degrees
                (otherwise, radians)
 
              Other keyword arguments are passed to
-             :func:`matplotlib.pyplot.plot`.
+             :meth:`matplotlib.pyplot.plot`.
 
         **Returns:**
 
@@ -353,7 +347,7 @@ class LinRes(Res):
 
         # Create a title if necessary.
         if title is None:
-            title = "Bode plot of " + self.fbase
+            title = "Bode plot of %s" % self.fbase
 
         # Set up the color(s) and line style(s).
         if not iterable(colors):
@@ -405,7 +399,7 @@ class LinRes(Res):
         The Nyquist plots of a MIMO system are overlayed. This is different
         than MATLAB\ :sup:`®`, which creates an array of subplots.
 
-        **Parameters:**
+        **Arguments:**
 
         - *ax*: Axes onto which the Nyquist diagram should be plotted
 
@@ -419,12 +413,12 @@ class LinRes(Res):
         - *label*: Label for the figure (ignored if ax is provided)
 
              This is used as the base filename if the figure is saved using
-             :func:`~modelicares.util.save` or
-             :func:`~modelicares.util.saveall`.
+             :meth:`~modelicares.util.save` or
+             :meth:`~modelicares.util.saveall`.
 
         - *title*: Title for the figure
 
-             If *title* is 'None' (default), then the title will be "Nyquist
+             If *title* is *None* (default), then the title will be "Nyquist
              plot of fbase", where fbase is the base filename of the data.  Use
              '' for no title.
 
@@ -443,25 +437,25 @@ class LinRes(Res):
              - *freqs*: List or frequencies or tuple of (min, max) frequencies
                over which to plot the system response.
 
-                  If *freqs* is 'None', then an appropriate range will be
+                  If *freqs* is *None*, then an appropriate range will be
                   determined automatically.
 
-             - *in_Hz*: If `True` (default), the frequencies (*freqs*) are in
+             - *in_Hz*: If *True* (default), the frequencies (*freqs*) are in
                Hz and should be plotted in Hz (otherwise, rad/s)
 
-             - *mark*: `True`, if the -1 point should be marked on the plot
+             - *mark*: *True*, if the -1 point should be marked on the plot
 
-             - *show_axes*: `True`, if the axes should be shown
+             - *show_axes*: *True*, if the axes should be shown
 
              - *skip*: Mark every nth frequency on the plot with a dot
 
-                  If *skip* is 0 or 'None', then the frequencies are not marked.
+                  If *skip* is 0 or *None*, then the frequencies are not marked.
 
-             - *label_freq*: If `True`, if the marked frequencies should be
+             - *label_freq*: If *True*, if the marked frequencies should be
                labeled
 
              Other keyword arguments are passed to
-             :func:`matplotlib.pyplot.plot`.
+             :meth:`matplotlib.pyplot.plot`.
 
         **Returns:**
 
@@ -479,7 +473,7 @@ class LinRes(Res):
 
         # Create a title if necessary.
         if title is None:
-            title = "Nyquist plot of " + self.fbase
+            title = "Nyquist plot of %s" % self.fbase
 
         # Set up the color(s).
         if not iterable(colors):
@@ -501,13 +495,14 @@ class LinRes(Res):
             # Note: modelicares._freqplot.nyquist() is currently only
             # implemented for SISO systems.
 
+
         # Decorate.
         if len(pairs) > 1:
             ax.legend()
         ax.set_title(title)
-        if xlabel:  # Without this check, xlabel=None will give label of "None".
+        if xlabel: # Without this check, xlabel=None will give label of "None".
             ax.set_xlabel(xlabel)
-        if ylabel:  # Same purpose
+        if ylabel: # Same purpose
             ax.set_ylabel(ylabel)
 
         return ax
@@ -522,15 +517,13 @@ def _get_lins(fnames):
     for fname in fnames:
         try:
             lins.append(LinRes(fname))
-        except (AssertionError, IndexError, IOError, KeyError, TypeError,
-                ValueError):
+        except:
             continue
     assert len(lins) > 0, "No linearizations were loaded."
     return lins
 
 
 class LinResList(ResList):
-
     r"""Specialized list of linearization results
 
     **Initialization signatures:**
@@ -611,12 +604,11 @@ class LinResList(ResList):
 
     **Properties:**
 
-    - :attr:`dirname` - Highest common directory that the result files share
+    - *basedir* - Highest common directory that the result files share
 
-    - Also, the properties of :class:`LinRes` (:attr:`basename`,
-      :attr:`dirname`, :attr:`fname`, :attr:`sys`, and :attr:`tool`) can be
-      retrieved as a list across all of the linearizations; see the example
-      below.
+    - Also, the properties of :class:`LinRes` (*basename*, *dirname*, *fname*,
+      *sys*, and *tool*) can be retrieved as a list across all of the
+      linearizations; see the example below.
 
     **Example:**
 
@@ -642,9 +634,9 @@ class LinResList(ResList):
         if not args:
             super(LinResList, self).__init__([])
 
-        elif isinstance(args[0], string_types):  # Filenames or directories
+        elif isinstance(args[0], string_types): # Filenames or directories
             try:
-                fnames = multiglob(args)
+                fnames = util.multiglob(args)
             except TypeError:
                 raise TypeError(
                     "The linearization list can only be initialized by "
@@ -652,7 +644,7 @@ class LinResList(ResList):
                     "arguments, each of which is a filename or directory.")
             list.__init__(self, _get_lins(fnames))
 
-        elif len(args) == 1:  # List or iterable of LinRes instances
+        elif len(args) == 1: # List or iterable of LinRes instances
             lins = list(args[0])
             for lin in lins:
                 assert isinstance(lin, LinRes), ("All entries in the list must "
@@ -668,7 +660,7 @@ class LinResList(ResList):
     def append(self, item):
         """Add linearization(s) to the end of the list of linearizations.
 
-        **Parameters:**
+        **Arguments:**
 
         - *item*: :class:`LinRes` instance or a file specification
 
@@ -716,7 +708,7 @@ class LinResList(ResList):
             assert isinstance(item, string_types), (
                 "The linearization list can only be appended by providing a "
                 "LinRes instance, filename, or directory.")
-            fnames = multiglob(item)
+            fnames = util.multiglob(item)
             self.extend(LinResList(_get_lins(fnames)))
 
     def __str__(self):
@@ -748,20 +740,20 @@ class LinResList(ResList):
             return ("List of linearization results (LinRes instance) from\n"
                     + self[0].fname)
         else:
-            dirname = self.dirname
+            basedir = self.basedir
             string = ("List of linearization results (LinRes instances) from "
                       "the following files")
             string += ("\nin the %s directory:\n   "
-                       % dirname if dirname else ":\n   ")
+                       % basedir if basedir else ":\n   ")
             string += "\n   ".join(self.fnames)
             return string
 
     def _get_labels(self, labels):
         """Create labels for the legend of a Bode or Nyquist plot.
 
-        If *labels* is 'None', then no label will be used.  If it is an empty
+        If *labels* is *None*, then no label will be used.  If it is an empty
         string (''), then the filenames will be used (resolved to the
-        *dirname*).
+        *basedir*).
         """
         if labels is None:
             try:
@@ -769,7 +761,7 @@ class LinResList(ResList):
             except AttributeError:
                 labels = self.fnames
         elif labels == '':
-            labels = [''] * len(self)
+            labels = ['']*len(self)
 
         return labels
 
@@ -782,7 +774,7 @@ class LinResList(ResList):
         This method calls :meth:`LinRes.bode` from the included instances
         of :class:`LinRes`.
 
-        **Parameters:**
+        **Arguments:**
 
         - *axes*: Tuple (pair) of axes for the magnitude and phase plots
 
@@ -797,14 +789,14 @@ class LinResList(ResList):
         - *label*: Label for the figure (ignored if axes is provided)
 
              This is used as the base filename if the figure is saved using
-             :func:`~modelicares.util.save` or
-             :func:`~modelicares.util.saveall`.
+             :meth:`~modelicares.util.save` or
+             :meth:`~modelicares.util.saveall`.
 
         - *title*: Title for the figure
 
         - *labels*: Label or list of labels for the legends
 
-             If *labels* is 'None', then no label will be used.  If it is an
+             If *labels* is *None*, then no label will be used.  If it is an
              empty string (''), then the base filenames will be used.
 
         - *colors*: Color or list of colors that will be used sequentially
@@ -824,28 +816,28 @@ class LinResList(ResList):
                 http://matplotlib.sourceforge.net/api/collections_api.html
 
         - *leg_kwargs*: Dictionary of keyword arguments for
-          :func:`matplotlib.pyplot.legend`
+          :meth:`matplotlib.pyplot.legend`
 
-             If *leg_kwargs* is 'None', then no legend will be shown.
+             If *leg_kwargs* is *None*, then no legend will be shown.
 
         - *\*\*kwargs*: Additional plotting arguments:
 
              - *freqs*: List or frequencies or tuple of (min, max) frequencies
                over which to plot the system response.
 
-                  If *freqs* is 'None', then an appropriate range will be
+                  If *freqs* is *None*, then an appropriate range will be
                   determined automatically.
 
-             - *in_Hz*: If `True` (default), the frequencies (*freqs*) are in
+             - *in_Hz*: If *True* (default), the frequencies (*freqs*) are in
                Hz and should be plotted in Hz (otherwise, rad/s)
 
-             - *in_dB*: If `True` (default), plot the magnitude in dB
+             - *in_dB*: If *True* (default), plot the magnitude in dB
 
-             - *in_deg*: If `True` (default), plot the phase in degrees
+             - *in_deg*: If *True* (default), plot the phase in degrees
                (otherwise, radians)
 
              Other keyword arguments are passed to
-             :func:`matplotlib.pyplot.plot`.
+             :meth:`matplotlib.pyplot.plot`.
 
         **Returns:**
 
@@ -908,10 +900,10 @@ class LinResList(ResList):
                 leg_kwargs={}, **kwargs):
         r"""Plot the linearizations onto a single Nyquist diagram.
 
-        This method calls :meth:`~LinRes.nyquist` from the included instances of
-        :class:`LinRes`.
+        This method calls :meth:`linres.LinRes.nyquist` from the included
+        instances of :class:`linres.LinRes`.
 
-        **Parameters:**
+        **Arguments:**
 
         - *ax*: Axes onto which the Nyquist diagrams should be plotted
 
@@ -925,8 +917,8 @@ class LinResList(ResList):
         - *label*: Label for the figure (ignored if axes is provided)
 
              This is used as the base filename if the figure is saved using
-             :func:`~modelicares.util.save` or
-             :func:`~modelicares.util.saveall`.
+             :meth:`~modelicares.util.save` or
+             :meth:`~modelicares.util.saveall`.
 
         - *title*: Title for the figure
 
@@ -936,7 +928,7 @@ class LinResList(ResList):
 
         - *labels*: Label or list of labels for the legends
 
-             If *labels* is 'None', then no label will be used.  If it is an
+             If *labels* is *None*, then no label will be used.  If it is an
              empty string (''), then the base filenames will be used.
 
         - *colors*: Color or list of colors that will be used sequentially
@@ -946,34 +938,34 @@ class LinResList(ResList):
              .. Seealso:: http://matplotlib.sourceforge.net/api/colors_api.html
 
         - *leg_kwargs*: Dictionary of keyword arguments for
-          :func:`matplotlib.pyplot.legend`
+          :meth:`matplotlib.pyplot.legend`
 
-             If *leg_kwargs* is 'None', then no legend will be shown.
+             If *leg_kwargs* is *None*, then no legend will be shown.
 
         - *\*\*kwargs*: Additional plotting arguments:
 
              - *freqs*: List or frequencies or tuple of (min, max) frequencies
                over which to plot the system response.
 
-                  If *freqs* is 'None', then an appropriate range will be
+                  If *freqs* is *None*, then an appropriate range will be
                   determined automatically.
 
-             - *in_Hz*: If `True` (default), the frequencies (*freqs*) are in
+             - *in_Hz*: If *True* (default), the frequencies (*freqs*) are in
                Hz and should be plotted in Hz (otherwise, rad/s)
 
-             - *mark*: `True`, if the -1 point should be marked on the plot
+             - *mark*: *True*, if the -1 point should be marked on the plot
 
-             - *show_axes*: `True`, if the axes should be shown
+             - *show_axes*: *True*, if the axes should be shown
 
              - *skip*: Mark every nth frequency on the plot with a dot
 
-                  If *skip* is 0 or 'None', then the frequencies are not marked.
+                  If *skip* is 0 or *None*, then the frequencies are not marked.
 
-             - *label_freq*: If `True`, if the marked frequencies should be
+             - *label_freq*: If *True*, if the marked frequencies should be
                labeled
 
              Other keyword arguments are passed to
-             :func:`matplotlib.pyplot.plot`.
+             :meth:`matplotlib.pyplot.plot`.
 
         **Returns:**
 
@@ -1015,7 +1007,7 @@ class LinResList(ResList):
         if xlabel:
             # Without this check, xlabel=None will give a label of "None".
             ax.set_xlabel(xlabel)
-        if ylabel:  # Same purpose
+        if ylabel: # Same purpose
             ax.set_ylabel(ylabel)
         if leg_kwargs is not None:
             loc = leg_kwargs.pop('loc', 'best')

@@ -7,28 +7,28 @@ __copyright__ = ("Copyright 2012-2014, Kevin Davies, Hawaii Natural Energy "
                  "Institute, and Georgia Tech Research Corporation")
 __license__ = "BSD-compatible (see LICENSE.txt)"
 
-# Standard pylint settings for this project:
-# pylint: disable=I0011, C0302, C0325, R0903, R0904, R0912, R0913, R0914, R0915
-# pylint: disable=I0011, W0141, W0142
-
-# Other:
-# pylint: disable=I0011, E1101, E1121
 
 import wx
 
-from collections import OrderedDict
 from matplotlib import rcParams
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
 from matplotlib.figure import Figure
 from six import string_types
-from .util import tree
+
+from modelicares.texunit import unit2tex
+
+# Standard pylint settings for this project:
+# pylint: disable=I0011, C0302, C0325, R0903, R0904, R0912, R0913, R0914, R0915,
+# pylint: disable=I0011, W0141, W0142
+
+# Other:
+# pylint: disable=E1101
 
 class PreviewPanel(wx.Panel):
-
     """Panel for information about a variable
     """
-
     def __init__(self, parent, id_num):
+
         # Change the matplotlib backend, but remember the original.
         orig_backend = rcParams['backend']
         rcParams['backend'] = 'WXAgg'
@@ -59,10 +59,10 @@ class PreviewPanel(wx.Panel):
         """Show the variable's attributes and a small plot."""
         self.axes.clear()
         if name:
-            text = 'Name: ' + name
-            text += '\n' + 'Description: ' + sim[name].description
-            text += '\n' + 'unit: ' + sim[name].unit
-            text += '\n' + 'displayUnit: ' + sim[name].displayUnit
+            text = 'Name: %s' % name
+            text += '\n' + 'Description: %s' % sim[name].description
+            text += '\n' + 'unit: %s' % sim[name].unit
+            text += '\n' + 'displayUnit: %s' % sim[name].displayUnit
             self.display.SetLabel(text)
             self.axes.clear()
             self.axes.plot(sim[name].times(), sim[name].values())
@@ -80,11 +80,10 @@ class PreviewPanel(wx.Panel):
 
 
 class Browser(wx.Frame):
-
     """Class to browse the variables of a simulation (used in
     :meth:`simres.SimRes.browse`)
 
-    **Initialization parameters:**
+    **Initialization arguments:**
 
     - *parent*: Parent frame
 
@@ -92,7 +91,7 @@ class Browser(wx.Frame):
 
     - *sim*: Instance of :class:`simres.SimRes`
     """
-    # pylint: disable=I0011, C0103
+    # pylint: disable=C0103
 
     def __init__(self, parent, id_num, sim):
 
@@ -107,7 +106,7 @@ class Browser(wx.Frame):
                 else:
                     data.SetData('')
                     subbranch = self.tree.AppendItem(branch, key, data=data)
-                    _build_tree(branches[key], subbranch)  # Recursion
+                    _build_tree(branches[key], subbranch) # Recursion
 
         # Initial setup
         wx.Frame.__init__(self, parent, id_num, pos=wx.DefaultPosition,
@@ -120,10 +119,9 @@ class Browser(wx.Frame):
 
         # Add the tree.
         self.tree = wx.TreeCtrl(panel_left, 1, wx.DefaultPosition, (-1, -1),
-                                wx.TR_HIDE_ROOT | wx.TR_HAS_BUTTONS)
-        names = sim.names
-        tr = util.tree(names, names, container=OrderedDict)
-        _build_tree(tr, self.tree.AddRoot(sim.fbase))
+                                wx.TR_HIDE_ROOT|wx.TR_HAS_BUTTONS)
+        root = sim.nametree()
+        _build_tree(root, self.tree.AddRoot(sim.fbase))
 
         # Bind events and finish.
         self.tree.Bind(wx.EVT_TREE_BEGIN_DRAG, self.OnDragInit)

@@ -1,25 +1,31 @@
 #!/usr/bin/python
-"""Functions and classes to run Modelica_ simulation experiments and load,
-analyze, and plot the results
+"""Functions and classes to set up Modelica_ simulations and load, analyze, and
+plot the results
 
 This module provides convenient access to the most important functions and
 classes from the submodules.  These are:
 
-- To run simulation experiments (:mod:`~modelicares.exps` submodule):
-  :mod:`~modelicares.exps.doe`, :func:`~exps.read_params`, and
-  :func:`~exps.write_params`
+- To manage simulation experiments (:mod:`~modelicares.exps` submodule):
+  :mod:`~modelicares.exps.doe`, :class:`~exps.Experiment`,
+  :meth:`~exps.gen_experiments`, :meth:`~exps.modelica_str`,
+  :class:`~exps.ParamDict`, :meth:`~exps.run_models`,
+  :meth:`~exps.write_params`, and :meth:`~exps.write_script`
 
-- To load, analyze, and plot simulation results (:mod:`~modelicares.simres`
-  submodule): :class:`~simres.SimRes` and :class:`~simres.SimResList`
+- For simulation results (:mod:`~modelicares.simres` submodule):
+  :class:`~simres.SimRes` and :class:`~simres.SimResList`
 
-- To load, analyze, and plot linearization results (:mod:`~modelicares.linres`
-  submodule): :class:`~linres.LinRes` and :class:`~linres.LinResList`
+- For linearization results (:mod:`~modelicares.linres` submodule):
+  :class:`~linres.LinRes` and :class:`~linres.LinResList`
+
+- To label numbers and quantities (:mod:`~modelicares.texunit` submodule):
+  :meth:`~texunit.number_label`, :meth:`~texunit.quantity_str`, and
+  :meth:`~texunit.unit2tex`
 
 - Supporting classes and functions (:mod:`~modelicares.util` submodule):
-  :func:`~util.add_arrows`, :func:`~util.add_hlines`, :func:`~util.add_vlines`,
-  :class:`~util.ArrowLine`, :func:`~util.closeall`, :func:`~util.figure`,
-  :func:`~util.load_csv`, :class:`~util.ParamDict`, :func:`~util.save`,
-  :func:`~util.saveall`, and :func:`~util.setup_subplots`
+  :meth:`~util.add_arrows`, :meth:`~util.add_hlines`, :meth:`~util.add_vlines`,
+  :class:`~util.ArrowLine`, :meth:`~util.closeall`, :meth:`~util.figure`,
+  :meth:`~util.load_csv`, :meth:`~util.multiglob`, :meth:`~util.save`,
+  :meth:`~util.saveall`, and :meth:`~util.setup_subplots`
 
 There is also a local function:
 
@@ -31,28 +37,31 @@ __email__ = "kdavies4@gmail.com"
 __copyright__ = ("Copyright 2012-2014, Kevin Davies, Hawaii Natural Energy "
                  "Institute, and Georgia Tech Research Corporation")
 __license__ = "BSD-compatible (see LICENSE.txt)"
+__version__ = '0.12.2'
 
-from ._version import get_versions
-__version__ = get_versions()['version']
-del get_versions
 
 # Standard pylint settings for this project:
-# pylint: disable=I0011, C0302, C0325, R0903, R0904, R0912, R0913, R0914, R0915
+# pylint: disable=I0011, C0302, C0325, R0903, R0904, R0912, R0913, R0914, R0915,
 # pylint: disable=I0011, W0141, W0142
 
 # Other:
-# pylint: disable=I0011, W0611
+# pylint: disable=W0611
 
 # Essential functions and classes
 #
 # These will be available directly from modelicares; others must be loaded from
 # their submodules.
-from .simres import SimRes, SimResList, SimResSequence
-from .linres import LinRes, LinResList
-from .util import (add_arrows, add_hlines, add_vlines, ArrowLine, closeall,
-                   figure, load_csv, ParamDict, save, saveall, setup_subplots)
-from .exps import (doe, read_options, read_params, write_options, write_params,
-                   simulators)
+from modelicares.simres import SimRes, SimResList
+from modelicares.linres import LinRes, LinResList
+from modelicares.util import (add_arrows, add_hlines, add_vlines, ArrowLine,
+                              closeall, multiglob, figure, load_csv, save,
+                              saveall, setup_subplots)
+from modelicares.exps import (doe, Experiment, gen_experiments, modelica_str,
+                              ParamDict, read_params, write_params,
+                              write_script)
+# TODO: Add run_models and include in the doc list once implemented.
+from modelicares.texunit import number_label, quantity_str, unit2tex
+
 
 def load(*args):
     """Load multiple Modelica_ simulation and/or linearization results.
@@ -89,7 +98,6 @@ def load(*args):
        >>> sims['L.L'].value()
        [15.0, 21.0]
     """
-    from natu.util import multiglob
 
     # Get the set of matching filenames.
     fnames = multiglob(args)
@@ -102,12 +110,10 @@ def load(*args):
             sims.append(SimRes(fname))
         except IOError:
             continue
-        except (AssertionError, IndexError, KeyError, TypeError,
-                ValueError):
+        except:
             try:
                 lins.append(LinRes(fname))
-            except (AssertionError, IndexError, IOError, KeyError, TypeError,
-                    ValueError):
+            except:
                 continue
 
     return sims, lins
